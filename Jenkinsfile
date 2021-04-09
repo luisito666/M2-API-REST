@@ -50,5 +50,18 @@ pipeline {
                 }
             }
         }
+
+        stage('Publish develop') {
+            when {
+                branch 'ainara2'
+            }
+            steps {
+                script {
+                    docker.withRegistry("", "DockerHubCredentials") {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
     }
 }
