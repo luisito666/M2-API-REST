@@ -12,7 +12,7 @@ from rest_framework import exceptions, serializers
 from .state import User
 from .tokens import AccessToken
 from .utils import get_string_and_html
-from .models import Pages
+from .models import Pages, Token, Site, Image
 
 class PasswordField(serializers.CharField):
     def __init__(self, *args, **kwargs):
@@ -93,11 +93,12 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user = User.objects.create_account(**validated_data)
         user.save()
-        self.send_activation_email(user)
+        token = Token.to_active(user)
+        self.send_activation_email(user, token)
         return user
 
-    def send_activation_email(self, user):
-        html_content, string_content = get_string_and_html('email/email_confirmation.html', {'user': user})
+    def send_activation_email(self, user, token):
+        html_content, string_content = get_string_and_html('email/email_confirmation.html', {'user': user, 'token': token})
         subject = _('Bienvenido a ') + settings.SERVERNAME
         email = EmailMultiAlternatives(subject, string_content, settings.EMAIL_HOST_USER, [user.email])
         email.attach_alternative(html_content, "text/html")
@@ -152,6 +153,18 @@ class ChangePasswordSerializer(serializers.Serializer):
         return data
 
 
+class ResetPasswordSerializer(serializers.Serializer):
+    """
+    """
+    new_password = PasswordField()
+    new_password_again = PasswordField()
+
+    def validate(self, data):
+        if data['new_password'] != data['new_password_again']:
+            raise serializers.ValidationError('password must be equal')
+        return data
+
+
 class DownloadSerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True)
     provider = serializers.CharField(max_length=30)
@@ -167,6 +180,49 @@ class PagesSerializer(serializers.ModelSerializer):
         model = Pages
         fields = ('slug', 'title', 'content',
         'published', 'create_at', 'modified_at')
+        lookup_field = 'slug'
+        extra_kwargs = {
+            'url': {'lookup_field': 'slug'}
+        }
+
+class RequestPasswordSerializer(serializers.Serializer):
+    login = serializers.CharField()
+
+    def validate(self, data):
+        try:
+            user = User.objects.get(login=data['login'])
+            token = Token.to_reset(user)
+            self.send_rest_password_email(user, token)
+            return data
+        except User.DoesNotExist:
+            raise serializers.ValidationError('User not found in database')
+
+    def send_rest_password_email(self, user, token):
+        html_content, string_content = get_string_and_html('email/reset_password.html', {'user': user, 'token': token})
+        subject = _('Olvido de Contraseña - ') + settings.SERVERNAME
+        email = EmailMultiAlternatives(subject, string_content, settings.EMAIL_HOST_USER, [user.email])
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+
+
+class ImageSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Image
+        fields = ('name', 'image', 'types')
+
+
+class SiteSerializer(serializers.ModelSerializer):
+
+    images = ImageSerializer(many=True)
+    footer_menu = PagesSerializer(many=True)
+
+    class Meta:
+        model = Site
+        fields = ('name', 'slug', 'images', 'initial_level',
+        'max_level', 'rates', 'facebook_url', 'facebook_enable',
+        'footer_menu', 'footer_info', 'footer_menu_enable', 'footer_info_enable', 
+        'forum_url', 'last_online')
         lookup_field = 'slug'
         extra_kwargs = {
             'url': {'lookup_field': 'slug'}

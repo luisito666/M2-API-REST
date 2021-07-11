@@ -170,9 +170,13 @@ STATICFILES_DIRS = [
 
 # Django Cors 
 CORS_ORIGIN_WHITELIST = [
-    "https://metin2lamda.com",
-    "https://www.metin2lamda.com"
+    f'https://{ os.environ["SERVER_DOMAIN"] }',
+    f'https://www.{ os.environ["SERVER_DOMAIN"] }',
+    os.environ['CORS_ORIGIN_ALLOW']
 ]
+
+if DEBUG:
+    CORS_ORIGIN_WHITELIST.append('http://localhost:4200')
 
 # Mt2Web.py Config
 
@@ -213,6 +217,10 @@ REST_FRAMEWORK = {
         'register': '10/day'
     }
 }
+
+# Tokens Names
+TOKEN_ACTIVATION = 'activation'
+TOKEN_RESET_PASSWORD = 'reset_password'
 
 ## Banned a available account
 BANNED = 'BLOCK'
